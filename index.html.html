@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f7f2" />
+  <title>Gather — Meal Planner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        colors: {
+          ink: '#24332d', sage: '#dce8dc', moss: '#496b58',
+          cream: '#f7f7f2', paper: '#fffefa', apricot: '#f4d7bd',
+          line: '#e7e8df'
+        },
+        boxShadow: { soft: '0 12px 32px rgba(36,51,45,.07)' }
+      }}
+    };
+  </script>
+  <style>
+    :root { color-scheme: light; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body { background:#f7f7f2; color:#24332d; font-family: ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button, input, select { font: inherit; }
+    button, select, input { touch-action: manipulation; }
+    .touch { min-height:48px; }
+    .tab.active { background:#24332d;color:white; }
+    .meal-card { min-height:142px; }
+    .ingredient-row { display:grid;grid-template-columns:minmax(0,1fr) 88px 100px 44px;gap:8px; }
+    .safe-bottom { padding-bottom:max(1rem, env(safe-area-inset-bottom)); }
+    .safe-top { padding-top:max(.75rem, env(safe-area-inset-top)); }
+    input, select { outline:none; }
+    input:focus, select:focus { border-color:#496b58 !important; box-shadow:0 0 0 3px rgba(73,107,88,.13); }
+    .checkline.checked span { text-decoration:line-through;color:#89928b; }
+    .rating-stars { display:flex; align-items:center; gap:4px; }
+    .rating-star { border:0; background:transparent; color:#c9c9bd; font-size:1.8rem; line-height:1; padding:4px; min-width:36px; min-height:44px; cursor:pointer; }
+    .rating-star.selected { color:#d69a35; }
+    .rating-star:focus-visible { outline:2px solid #496b58; outline-offset:2px; border-radius:8px; }
+    @media (max-width: 520px) {
+      .ingredient-row { grid-template-columns:minmax(0,1fr) 68px 82px 40px;gap:5px; }
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <header class="safe-top sticky top-0 z-30 border-b border-line bg-cream/95 backdrop-blur">
+    <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 pb-3 sm:px-6 lg:px-8">
+      <div class="flex items-center gap-3">
+        <div class="grid h-11 w-11 place-items-center rounded-2xl bg-ink text-xl text-white">✳</div>
+        <div><div class="text-xl font-black tracking-tight">gather<span class="text-moss">.</span></div><div class="text-xs text-stone-500">A calmer way to plan meals</div></div>
+      </div>
+      <div class="hidden rounded-full bg-sage px-4 py-2 text-sm font-semibold text-moss sm:block">Your kitchen, organised</div>
+      <button id="exportBtn" class="touch rounded-xl border border-line bg-paper px-4 text-sm font-bold shadow-sm">Export data</button>
+    </div>
+    <nav class="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 sm:px-6 lg:px-8" aria-label="Main navigation">
+      <button class="tab active touch shrink-0 rounded-xl px-5 text-sm font-bold" data-tab="planner">Weekly planner</button>
+      <button class="tab touch shrink-0 rounded-xl px-5 text-sm font-bold text-stone-600" data-tab="recipes">Recipes</button>
+      <button class="tab touch shrink-0 rounded-xl px-5 text-sm font-bold text-stone-600" data-tab="shopping">Shopping list <span id="shoppingCount" class="ml-1 rounded-full bg-apricot px-2 py-0.5 text-xs text-ink">0</span></button>
+    </nav>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <section id="plannerView" class="view space-y-5">
+      <div class="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div><p class="mb-1 text-xs font-bold uppercase tracking-[.18em] text-moss">The week ahead</p><h1 class="text-3xl font-black tracking-tight sm:text-4xl">Your meal plan</h1><p class="mt-2 text-sm text-stone-500">A little planning goes a long way. Pick a recipe for each moment.</p></div>
+        <div class="flex flex-wrap gap-2">
+          <button id="randomAllBtn" class="touch rounded-xl bg-apricot px-5 font-bold text-ink shadow-sm">✦ Surprise my week</button>
+          <button id="clearWeekBtn" class="touch rounded-xl border border-line bg-paper px-5 font-bold text-stone-600">Clear week</button>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-paper p-4 shadow-soft">
+        <div class="mr-auto"><div class="font-bold">Random picker</div><div class="text-sm text-stone-500">Choose a tag to narrow the surprise, or leave it on all recipes.</div></div>
+        <select id="randomTag" class="touch min-w-[180px] rounded-xl border border-line bg-white px-4 text-sm"><option value="">All tags</option></select>
+      </div>
+      <div id="weekGrid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+      <div class="rounded-2xl bg-sage/70 p-4 text-sm text-moss"><strong>Tip:</strong> Your shopping list updates automatically whenever you change a meal. Everything is saved on this device.</div>
+    </section>
+
+    <section id="recipesView" class="view hidden space-y-5">
+      <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div><p class="mb-1 text-xs font-bold uppercase tracking-[.18em] text-moss">Your collection</p><h1 class="text-3xl font-black tracking-tight sm:text-4xl">Recipe box</h1><p class="mt-2 text-sm text-stone-500">Save the meals you love, with ingredients ready for your list.</p></div>
+        <button id="newRecipeBtn" class="touch rounded-xl bg-ink px-5 font-bold text-white shadow-soft">＋ Add a recipe</button>
+      </div>
+      <div id="tagFilters" class="flex flex-wrap gap-2"></div>
+      <div id="recipeList" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+      <div id="recipeEmpty" class="hidden rounded-3xl border-2 border-dashed border-line bg-paper p-10 text-center"><div class="text-4xl">🍲</div><h3 class="mt-3 text-xl font-bold">Your recipe box is waiting</h3><p class="mt-1 text-sm text-stone-500">Add your first recipe to start planning the week.</p><button class="touch mt-5 rounded-xl bg-ink px-5 font-bold text-white" onclick="openRecipeModal()">Add a recipe</button></div>
+    </section>
+
+    <section id="shoppingView" class="view hidden space-y-5">
+      <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div><p class="mb-1 text-xs font-bold uppercase tracking-[.18em] text-moss">Ready when you are</p><h1 class="text-3xl font-black tracking-tight sm:text-4xl">Shopping list</h1><p class="mt-2 text-sm text-stone-500">Combined ingredients from every meal in your weekly plan.</p></div>
+        <div class="flex gap-2"><button id="copyListBtn" class="touch rounded-xl border border-line bg-paper px-4 font-bold">Copy list</button><button id="resetChecksBtn" class="touch rounded-xl bg-ink px-4 font-bold text-white">Uncheck all</button></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3 sm:max-w-md">
+        <div class="rounded-2xl bg-paper p-4 shadow-soft"><div id="remainingCount" class="text-3xl font-black">0</div><div class="text-xs font-semibold text-stone-500">Still to get</div></div>
+        <div class="rounded-2xl bg-paper p-4 shadow-soft"><div id="doneCount" class="text-3xl font-black">0</div><div class="text-xs font-semibold text-stone-500">In your basket</div></div>
+      </div>
+      <div id="shoppingList" class="space-y-3"></div>
+      <div id="shoppingEmpty" class="hidden rounded-3xl border-2 border-dashed border-line bg-paper p-10 text-center"><div class="text-4xl">🧺</div><h3 class="mt-3 text-xl font-bold">Nothing on the list yet</h3><p class="mt-1 text-sm text-stone-500">Add recipes to your weekly meals and ingredients will appear here.</p></div>
+    </section>
+  </main>
+
+  <div id="recipeModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-paper p-5 shadow-2xl sm:p-7">
+      <div class="mb-5 flex items-start justify-between gap-3"><div><p class="text-xs font-bold uppercase tracking-[.18em] text-moss">Recipe details</p><h2 id="modalTitle" class="mt-1 text-2xl font-black">Add a recipe</h2></div><button id="closeModalBtn" class="touch w-12 rounded-xl bg-cream text-xl" aria-label="Close">×</button></div>
+      <form id="recipeForm" class="space-y-5">
+        <input type="hidden" id="recipeId" />
+        <label class="block"><span class="mb-2 block text-sm font-bold">Recipe title</span><input id="recipeTitle" required maxlength="90" placeholder="e.g. Creamy tomato pasta" class="touch w-full rounded-xl border border-line bg-white px-4" /></label>
+        <label class="block"><span class="mb-2 block text-sm font-bold">Tags <span class="font-normal text-stone-400">(comma separated)</span></span><input id="recipeTags" placeholder="Vegetarian, Quick, Pasta" class="touch w-full rounded-xl border border-line bg-white px-4" /></label>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label class="block"><span class="mb-2 block text-sm font-bold">Serves</span><input id="recipeServes" type="text" maxlength="40" placeholder="e.g. 4 people" class="touch w-full rounded-xl border border-line bg-white px-4" /></label>
+          <label class="block"><span class="mb-2 block text-sm font-bold">Time taken</span><input id="recipeTime" type="text" maxlength="50" placeholder="e.g. 35 minutes" class="touch w-full rounded-xl border border-line bg-white px-4" /></label>
+        </div>
+        <div class="rounded-2xl bg-cream p-4">
+          <div class="text-sm font-bold">How much Hailee enjoys</div>
+          <div id="recipeRatingStars" class="rating-stars mt-1" role="group" aria-label="How much Hailee enjoys this recipe">
+            <button type="button" class="rating-star" data-rating="1" aria-label="1 out of 5 stars">★</button>
+            <button type="button" class="rating-star" data-rating="2" aria-label="2 out of 5 stars">★</button>
+            <button type="button" class="rating-star" data-rating="3" aria-label="3 out of 5 stars">★</button>
+            <button type="button" class="rating-star" data-rating="4" aria-label="4 out of 5 stars">★</button>
+            <button type="button" class="rating-star" data-rating="5" aria-label="5 out of 5 stars">★</button>
+          </div>
+          <input type="hidden" id="recipeEnjoys" value="0" />
+          <p id="recipeRatingHelp" class="mt-1 text-xs text-stone-500">Tap a star to give this recipe a rating. Tap the selected rating again to clear it.</p>
+        </div>
+        <div><div class="mb-3 flex items-center justify-between"><span class="text-sm font-bold">Ingredients</span><button type="button" id="addIngredientBtn" class="touch rounded-xl bg-sage px-4 text-sm font-bold text-moss">＋ Add ingredient</button></div><div id="ingredientEditor" class="space-y-2"></div><p class="mt-2 text-xs text-stone-400">Add a name, quantity and unit for each ingredient. Quantity can be a number or text such as “to taste”.</p></div>
+        <label class="block"><span class="mb-2 block text-sm font-bold">Method / steps</span><textarea id="recipeSteps" rows="5" placeholder="Write each step on a new line…" class="w-full rounded-xl border border-line bg-white px-4 py-3"></textarea><p class="mt-2 text-xs text-stone-400">Enter one step per line. Your steps will be shown in order on the recipe card.</p></label>
+        <div class="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:justify-between"><button type="button" id="deleteRecipeBtn" class="touch hidden rounded-xl px-4 font-bold text-red-600">Delete recipe</button><div class="flex flex-1 justify-end gap-2"><button type="button" id="cancelModalBtn" class="touch rounded-xl border border-line px-5 font-bold">Cancel</button><button type="submit" class="touch rounded-xl bg-ink px-6 font-bold text-white">Save recipe</button></div></div>
+      </form>
+    </div>
+  </div>
+  <div id="toast" class="pointer-events-none fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 translate-y-4 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white opacity-0 shadow-xl transition-all"></div>
+
+<script>
+(() => {
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const MEALS = ['Breakfast','Lunch','Dinner'];
+  const KEY = 'gather-meal-planner-v1';
+  const $ = id => document.getElementById(id);
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2));
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const blankWeek = () => Object.fromEntries(DAYS.map(d => [d, Object.fromEntries(MEALS.map(m => [m, '']))]));
+  let state = loadState();
+  let activeTag = '';
+  let toastTimer;
+
+  function loadState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY));
+      if (saved && Array.isArray(saved.recipes) && saved.week) return {
+        recipes: saved.recipes, week: Object.assign(blankWeek(), saved.week),
+        checked: saved.checked || {}
+      };
+    } catch(e) {}
+    return { recipes: [], week: blankWeek(), checked: {} };
+  }
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); renderAll(); }
+    catch(e) { showToast('Could not save — device storage may be full.'); }
+  }
+  function showToast(message) {
+    const el = $('toast'); el.textContent = message;
+    el.classList.remove('opacity-0','translate-y-4'); el.classList.add('opacity-100','translate-y-0');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.classList.add('opacity-0','translate-y-4'); el.classList.remove('opacity-100','translate-y-0'); }, 2200);
+  }
+  function allTags() { return [...new Set(state.recipes.flatMap(r => r.tags || []))].sort((a,b)=>a.localeCompare(b)); }
+  function recipeById(id) { return state.recipes.find(r => r.id === id); }
+  function openTab(name) {
+    document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+    $(name+'View').classList.remove('hidden');
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    window.scrollTo({top:0,behavior:'smooth'});
+    if(name === 'shopping') renderShopping();
+  }
+  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => openTab(b.dataset.tab)));
+
+  function renderAll() { renderPlanner(); renderRecipes(); renderShopping(); renderTagSelect(); }
+  function renderTagSelect() {
+    const select = $('randomTag'), value = select.value;
+    select.innerHTML = '<option value="">All tags</option>' + allTags().map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    select.value = allTags().includes(value) ? value : '';
+  }
+  function mealSelect(day, meal, selected) {
+    const options = state.recipes.map(r=>`<option value="${escapeHtml(r.id)}" ${r.id===selected?'selected':''}>${escapeHtml(r.title)}</option>`).join('');
+    return `<select class="meal-select touch w-full min-w-0 rounded-xl border border-line bg-white px-3 text-sm" data-day="${day}" data-meal="${meal}" aria-label="${day} ${meal} recipe"><option value="">Choose a recipe…</option>${options}</select>`;
+  }
+  function renderPlanner() {
+    $('weekGrid').innerHTML = DAYS.map(day => `
+      <article class="overflow-hidden rounded-2xl border border-line bg-paper shadow-soft">
+        <div class="flex items-center justify-between border-b border-line bg-white px-4 py-3"><h2 class="font-black">${day}</h2><span class="text-xs font-semibold text-stone-400">3 meals</span></div>
+        <div class="space-y-3 p-3">${MEALS.map(meal => {
+          const id = state.week[day]?.[meal] || '', recipe = recipeById(id);
+          return `<div class="meal-card rounded-xl bg-cream p-3">
+            <div class="mb-2 flex items-center justify-between gap-2"><span class="text-xs font-extrabold uppercase tracking-wider text-moss">${meal}</span><button class="surprise-btn touch rounded-lg px-3 text-xs font-bold text-moss hover:bg-sage" data-day="${day}" data-meal="${meal}" title="Pick a random recipe">✦ Surprise me</button></div>
+            ${mealSelect(day,meal,id)}
+            <div class="mt-2 min-h-5 text-xs text-stone-500">${recipe ? `${recipe.ingredients.length} ingredients${recipe.tags.length ? ' · '+recipe.tags.slice(0,3).map(escapeHtml).join(', ') : ''}` : 'No meal selected'}</div>
+          </div>`;
+        }).join('')}</div>
+      </article>`).join('');
+    document.querySelectorAll('.meal-select').forEach(sel => sel.addEventListener('change', e => {
+      const {day,meal} = e.target.dataset; state.week[day][meal] = e.target.value; persist();
+    }));
+    document.querySelectorAll('.surprise-btn').forEach(btn => btn.addEventListener('click', () => pickRandom(btn.dataset.day,btn.dataset.meal)));
+  }
+  function pickRandom(day, meal) {
+    const tag = $('randomTag').value;
+    const pool = state.recipes.filter(r => !tag || (r.tags||[]).includes(tag));
+    if (!pool.length) { showToast('No recipes match that tag yet.'); return; }
+    const current = state.week[day][meal];
+    const choices = pool.filter(r => r.id !== current);
+    const chosen = (choices.length ? choices : pool)[Math.floor(Math.random()*(choices.length ? choices.length : pool.length))];
+    state.week[day][meal] = chosen.id; persist(); showToast(`${day} ${meal}: ${chosen.title}`);
+  }
+  $('randomAllBtn').addEventListener('click', () => {
+    const tag = $('randomTag').value, pool = state.recipes.filter(r=>!tag || r.tags.includes(tag));
+    if(!pool.length) { showToast('Add a matching recipe first.'); return; }
+    DAYS.forEach(d=>MEALS.forEach(m=>{ state.week[d][m] = pool[Math.floor(Math.random()*pool.length)].id; }));
+    persist(); showToast('Your week has been filled with surprises!');
+  });
+  $('clearWeekBtn').addEventListener('click', () => {
+    if(!confirm('Clear all 21 meal slots?')) return;
+    state.week = blankWeek(); persist(); showToast('Your week is clear.');
+  });
+
+  function renderRecipes() {
+    const tags = allTags();
+    $('tagFilters').innerHTML = `<button class="touch rounded-full px-4 text-sm font-bold ${activeTag===''?'bg-ink text-white':'bg-paper text-stone-600 border border-line'}" data-tag="">All recipes (${state.recipes.length})</button>` +
+      tags.map(t=>`<button class="touch rounded-full border px-4 text-sm font-bold ${activeTag===t?'border-ink bg-ink text-white':'border-line bg-paper text-stone-600'}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
+    $('tagFilters').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{activeTag=b.dataset.tag;renderRecipes();}));
+    const filtered = state.recipes.filter(r=>!activeTag || r.tags.includes(activeTag)).sort((a,b)=>a.title.localeCompare(b.title));
+    $('recipeList').innerHTML = filtered.map(r=>`
+      <article class="rounded-2xl border border-line bg-paper p-5 shadow-soft">
+        <div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-black">${escapeHtml(r.title)}</h3><div class="mt-2 flex flex-wrap gap-1.5">${r.tags.map(t=>`<span class="rounded-full bg-sage px-2.5 py-1 text-xs font-bold text-moss">${escapeHtml(t)}</span>`).join('')}</div></div><button class="edit-recipe touch -mr-2 -mt-2 w-11 rounded-xl text-xl text-stone-400 hover:bg-cream" data-id="${r.id}" aria-label="Edit ${escapeHtml(r.title)}">···</button></div>
+        <div class="mt-3 rounded-xl bg-cream px-3 py-2">
+          <div class="text-xs font-bold text-stone-500">How much Hailee enjoys</div>
+          <div class="mt-0.5 flex items-center gap-2"><span class="text-lg tracking-wide" style="color:#d69a35" aria-label="${Number(r.enjoys)||0} out of 5 stars">${'★'.repeat(Math.max(0,Math.min(5,Number(r.enjoys)||0)))}${'☆'.repeat(5-Math.max(0,Math.min(5,Number(r.enjoys)||0)))}</span><span class="text-xs text-stone-500">${Number(r.enjoys)>0?`${Number(r.enjoys)}/5`:'Not rated yet'}</span></div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-moss">${r.serves?`<span class="rounded-lg bg-cream px-2.5 py-1">♟ Serves ${escapeHtml(r.serves)}</span>`:''}${r.time?`<span class="rounded-lg bg-cream px-2.5 py-1">◷ ${escapeHtml(r.time)}</span>`:''}</div>
+        <div class="mt-4 border-t border-line pt-3"><div class="mb-2 text-xs font-extrabold uppercase tracking-wider text-stone-400">${r.ingredients.length} ingredients</div><ul class="space-y-1 text-sm text-stone-600">${r.ingredients.slice(0,4).map(i=>`<li>· ${escapeHtml(i.name)} <span class="text-stone-400">${escapeHtml(i.quantity)} ${escapeHtml(i.unit)}</span></li>`).join('')}${r.ingredients.length>4?`<li class="text-xs text-moss">+ ${r.ingredients.length-4} more</li>`:''}</ul></div>
+        ${r.steps?.length?`<div class="mt-4 border-t border-line pt-3"><div class="mb-2 text-xs font-extrabold uppercase tracking-wider text-stone-400">Method</div><ol class="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-stone-600">${r.steps.slice(0,3).map(s=>`<li>${escapeHtml(s)}</li>`).join('')}${r.steps.length>3?`<li class="list-none text-xs text-moss">+ ${r.steps.length-3} more steps</li>`:''}</ol></div>`:''}
+      </article>`).join('');
+    $('recipeEmpty').classList.toggle('hidden',state.recipes.length!==0);
+    $('recipeList').classList.toggle('hidden',filtered.length===0);
+    if(state.recipes.length && filtered.length===0) $('recipeList').innerHTML='<div class="col-span-full rounded-2xl bg-paper p-8 text-center text-stone-500">No recipes with this tag.</div>';
+    document.querySelectorAll('.edit-recipe').forEach(b=>b.addEventListener('click',()=>editRecipe(b.dataset.id)));
+  }
+
+  function ingredientRow(item={name:'',quantity:'',unit:''}) {
+    const row=document.createElement('div'); row.className='ingredient-row';
+    row.innerHTML=`<input aria-label="Ingredient name" required maxlength="80" placeholder="Ingredient" value="${escapeHtml(item.name)}" class="touch min-w-0 rounded-xl border border-line bg-white px-3 text-sm" /><input aria-label="Quantity" placeholder="Qty" value="${escapeHtml(item.quantity)}" class="touch min-w-0 rounded-xl border border-line bg-white px-2 text-sm" /><input aria-label="Unit" placeholder="Unit" value="${escapeHtml(item.unit)}" class="touch min-w-0 rounded-xl border border-line bg-white px-2 text-sm" /><button type="button" class="remove-ingredient touch rounded-xl bg-cream text-lg text-stone-500" aria-label="Remove ingredient">×</button>`;
+    row.querySelector('button').addEventListener('click',()=>{ if($('ingredientEditor').children.length>1) row.remove(); else { row.querySelectorAll('input').forEach(i=>i.value=''); } });
+    $('ingredientEditor').appendChild(row);
+  }
+  function updateRatingStars() {
+    const rating=Number($('recipeEnjoys').value)||0;
+    $('recipeRatingStars').querySelectorAll('.rating-star').forEach(button=>{
+      const value=Number(button.dataset.rating);
+      button.classList.toggle('selected',value<=rating);
+      button.textContent=value<=rating?'★':'☆';
+      button.setAttribute('aria-pressed',value===rating?'true':'false');
+    });
+    $('recipeRatingHelp').textContent=rating?`${rating} out of 5 stars — tap the selected rating again to clear it.`:'Tap a star to give this recipe a rating.';
+  }
+  $('recipeRatingStars').querySelectorAll('.rating-star').forEach(button=>button.addEventListener('click',()=>{
+    const current=Number($('recipeEnjoys').value)||0;
+    $('recipeEnjoys').value=String(current===Number(button.dataset.rating)?0:Number(button.dataset.rating));
+    updateRatingStars();
+  }));
+
+  function openRecipeModal(recipe=null) {
+    $('recipeForm').reset(); $('ingredientEditor').innerHTML='';
+    $('recipeId').value=recipe?.id||''; $('recipeTitle').value=recipe?.title||'';
+    $('recipeTags').value=(recipe?.tags||[]).join(', ');
+    $('recipeServes').value=recipe?.serves||'';
+    $('recipeTime').value=recipe?.time||'';
+    $('recipeEnjoys').value=String(Math.max(0,Math.min(5,Number(recipe?.enjoys)||0)));
+    updateRatingStars();
+    $('recipeSteps').value=(recipe?.steps||[]).join('\n');
+    (recipe?.ingredients?.length ? recipe.ingredients : [{name:'',quantity:'',unit:''}]).forEach(ingredientRow);
+    $('modalTitle').textContent=recipe?'Edit recipe':'Add a recipe';
+    $('deleteRecipeBtn').classList.toggle('hidden',!recipe);
+    $('recipeModal').classList.remove('hidden'); $('recipeModal').classList.add('flex');
+    setTimeout(()=>$('recipeTitle').focus(),100);
+  }
+  window.openRecipeModal = openRecipeModal;
+  function closeRecipeModal() { $('recipeModal').classList.add('hidden'); $('recipeModal').classList.remove('flex'); }
+  function editRecipe(id) { const r=recipeById(id); if(r) openRecipeModal(r); }
+  $('newRecipeBtn').addEventListener('click',()=>openRecipeModal());
+  $('addIngredientBtn').addEventListener('click',()=>{ingredientRow();$('ingredientEditor').lastElementChild.querySelector('input').focus();});
+  $('closeModalBtn').addEventListener('click',closeRecipeModal);
+  $('cancelModalBtn').addEventListener('click',closeRecipeModal);
+  $('recipeModal').addEventListener('click',e=>{if(e.target===$('recipeModal'))closeRecipeModal();});
+  $('recipeForm').addEventListener('submit',e=>{
+    e.preventDefault();
+    const ingredients=[...$('ingredientEditor').children].map(row=>{const inputs=row.querySelectorAll('input');return {name:inputs[0].value.trim(),quantity:inputs[1].value.trim(),unit:inputs[2].value.trim()};}).filter(i=>i.name);
+    if(!ingredients.length){showToast('Add at least one ingredient.');return;}
+    const id=$('recipeId').value||uid(), existing=recipeById(id);
+    const recipe={id,title:$('recipeTitle').value.trim(),tags:[...new Set($('recipeTags').value.split(',').map(t=>t.trim()).filter(Boolean))],serves:$('recipeServes').value.trim(),time:$('recipeTime').value.trim(),enjoys:Math.max(0,Math.min(5,Number($('recipeEnjoys').value)||0)),steps:$('recipeSteps').value.split('\n').map(s=>s.trim()).filter(Boolean),ingredients};
+    if(existing) state.recipes=state.recipes.map(r=>r.id===id?recipe:r); else state.recipes.push(recipe);
+    closeRecipeModal(); persist(); showToast('Recipe saved.');
+  });
+  $('deleteRecipeBtn').addEventListener('click',()=>{
+    const id=$('recipeId').value; if(!id || !confirm('Delete this recipe? It will also be removed from your meal plan.'))return;
+    state.recipes=state.recipes.filter(r=>r.id!==id);
+    DAYS.forEach(d=>MEALS.forEach(m=>{if(state.week[d][m]===id)state.week[d][m]='';}));
+    closeRecipeModal(); persist(); showToast('Recipe deleted.');
+  });
+
+  function compiledItems() {
+    const map=new Map();
+    DAYS.forEach(d=>MEALS.forEach(m=>{
+      const r=recipeById(state.week[d]?.[m]); if(!r)return;
+      r.ingredients.forEach(i=>{
+        const name=i.name.trim(),unit=i.unit.trim(),key=name.toLocaleLowerCase()+'|'+unit.toLocaleLowerCase();
+        const numeric=Number(String(i.quantity).replace(',','.'));
+        if(!map.has(key))map.set(key,{key,name,unit,quantity:i.quantity,amount:Number.isFinite(numeric)&&String(i.quantity).trim()!==''?numeric:null,from:[`${d} ${m}`]});
+        else {
+          const item=map.get(key);
+          if(item.amount!==null && Number.isFinite(numeric) && String(i.quantity).trim()!=='') {item.amount+=numeric;item.quantity=String(Number(item.amount.toFixed(3)));}
+          else if(item.amount===null && String(i.quantity).trim() && item.quantity!==i.quantity) item.quantity='Various';
+          item.from.push(`${d} ${m}`);
+        }
+      });
+    }));
+    return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name));
+  }
+  function renderShopping() {
+    const items=compiledItems(), checkedCount=items.filter(i=>state.checked[i.key]).length;
+    $('shoppingCount').textContent=items.length;
+    $('remainingCount').textContent=items.length-checkedCount; $('doneCount').textContent=checkedCount;
+    $('shoppingEmpty').classList.toggle('hidden',items.length!==0);
+    $('shoppingList').innerHTML=items.map(i=>`
+      <label class="checkline ${state.checked[i.key]?'checked':''} flex min-h-[64px] cursor-pointer items-center gap-4 rounded-2xl border border-line bg-paper px-4 py-3 shadow-sm">
+        <input type="checkbox" class="h-6 w-6 shrink-0 accent-[#496b58]" data-key="${escapeHtml(i.key)}" ${state.checked[i.key]?'checked':''} />
+        <span class="min-w-0 flex-1 font-semibold">${escapeHtml(i.name)}<small class="mt-0.5 block text-xs font-normal text-stone-400">${i.from.length>1?'For '+i.from.join(', '):'For '+i.from[0]}</small></span>
+        <span class="shrink-0 text-sm font-bold text-moss">${escapeHtml(i.quantity)} ${escapeHtml(i.unit)}</span>
+      </label>`).join('');
+    $('shoppingList').querySelectorAll('input[type=checkbox]').forEach(c=>c.addEventListener('change',()=>{
+      state.checked[c.dataset.key]=c.checked; persist();
+    }));
+  }
+  $('resetChecksBtn').addEventListener('click',()=>{state.checked={};persist();});
+  $('copyListBtn').addEventListener('click',async()=>{
+    const items=compiledItems(); if(!items.length){showToast('Your list is empty.');return;}
+    const text=items.map(i=>`${state.checked[i.key]?'[x]':'[ ]'} ${i.name} — ${i.quantity} ${i.unit}`.trim()).join('\n');
+    try{await navigator.clipboard.writeText(text);showToast('Shopping list copied.');}
+    catch(e){showToast('Copy is not available in this browser.');}
+  });
+  $('exportBtn').addEventListener('click',()=>{
+    const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='gather-meal-planner.json';a.click();URL.revokeObjectURL(url);showToast('Your data export is ready.');
+  });
+  renderAll();
+})();
+</script>
+</body>
+</html>
