@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#f7f7f2" />
+  <meta name="theme-color" content="#fff7f4" />
   <title>Gather — Meal Planner</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: { extend: {
         colors: {
-          ink: '#24332d', sage: '#dce8dc', moss: '#496b58',
-          cream: '#f7f7f2', paper: '#fffefa', apricot: '#f4d7bd',
-          line: '#e7e8df'
+          ink: '#59465f', sage: '#f8e2eb', moss: '#986f91',
+          cream: '#fff7f4', paper: '#fffdfb', apricot: '#ffe8b8',
+          line: '#f0dfe8'
         },
         boxShadow: { soft: '0 12px 32px rgba(36,51,45,.07)' }
       }}
@@ -40,13 +40,49 @@
     @media (max-width: 520px) {
       .ingredient-row { grid-template-columns:minmax(0,1fr) 68px 82px 40px;gap:5px; }
     }
+
+    /* A soft, playful pastel refresh for Hailee — layout and controls stay the same. */
+    body {
+      background:
+        radial-gradient(ellipse at 8% 12%, rgba(255,222,235,.55), transparent 30rem),
+        radial-gradient(ellipse at 94% 36%, rgba(255,235,190,.42), transparent 28rem),
+        #fff7f4;
+      color:#59465f;
+    }
+    body::before {
+      content:""; position:fixed; inset:0; pointer-events:none; z-index:-1;
+      background-image:radial-gradient(rgba(190,143,173,.13) 1px, transparent 1px);
+      background-size:24px 24px; opacity:.38;
+    }
+    header { border-color:#f0dfe8 !important; background:rgba(255,249,248,.94) !important; }
+    .tab { transition:background .18s ease, color .18s ease, transform .18s ease; }
+    .tab.active { background:#986f91 !important; color:#fff !important; box-shadow:0 5px 14px rgba(152,111,145,.2); }
+    .tab:not(.active) { background:rgba(255,255,255,.7); }
+    .tab:not(.active):hover { background:#f8e2eb; color:#765879; }
+    article.rounded-2xl, #weekGrid > article {
+      border-color:#f0dfe8 !important; box-shadow:0 8px 24px rgba(125,85,112,.07);
+    }
+    #weekGrid > article > div:first-child { background:#fff1f5 !important; border-color:#f0dfe8 !important; }
+    #weekGrid .meal-card { background:rgba(255,253,251,.9); }
+    button { transition:filter .15s ease, transform .15s ease, box-shadow .15s ease; }
+    button:active { transform:scale(.98); }
+    button.bg-ink { background:#986f91 !important; color:#fff !important; }
+    button.bg-apricot { background:#ffe8b8 !important; color:#59465f !important; }
+    button.bg-sage { background:#f8e2eb !important; color:#805d7c !important; }
+    button.border-line, select, input, textarea { border-color:#efdce6 !important; }
+    input:focus, select:focus, textarea:focus { border-color:#c18eae !important; box-shadow:0 0 0 3px rgba(193,142,174,.18) !important; }
+    .rating-star.selected { color:#e5ad48 !important; text-shadow:0 2px 5px rgba(229,173,72,.18); }
+    #recipeList > article, #shoppingList > label { border-color:#f0dfe8 !important; box-shadow:0 8px 24px rgba(125,85,112,.06); }
+    #recipeModal > div { border:1px solid #f0dfe8; box-shadow:0 20px 60px rgba(89,70,95,.2); }
+    #toast { background:#765879 !important; }
+    ::selection { background:#f4d4e3; color:#59465f; }
   </style>
 </head>
 <body class="min-h-screen">
   <header class="safe-top sticky top-0 z-30 border-b border-line bg-cream/95 backdrop-blur">
     <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 pb-3 sm:px-6 lg:px-8">
       <div class="flex items-center gap-3">
-        <div class="grid h-11 w-11 place-items-center rounded-2xl bg-ink text-xl text-white">✳</div>
+        <div class="grid h-11 w-11 place-items-center rounded-2xl bg-ink text-xl text-white">🌸</div>
         <div><div class="text-xl font-black tracking-tight">gather<span class="text-moss">.</span></div><div class="text-xs text-stone-500">A calmer way to plan meals</div></div>
       </div>
       <div class="hidden rounded-full bg-sage px-4 py-2 text-sm font-semibold text-moss sm:block">Your kitchen, organised</div>
