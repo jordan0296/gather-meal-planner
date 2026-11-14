@@ -91,6 +91,7 @@
     <nav class="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 sm:px-6 lg:px-8" aria-label="Main navigation">
       <button class="tab active touch shrink-0 rounded-xl px-5 text-sm font-bold" data-tab="planner">Weekly planner</button>
       <button class="tab touch shrink-0 rounded-xl px-5 text-sm font-bold text-stone-600" data-tab="calendar">Calendar</button>
+      <button class="tab touch shrink-0 rounded-xl px-5 text-sm font-bold text-stone-600" data-tab="scanner">Recipe scanner</button>
       <button class="tab touch shrink-0 rounded-xl px-5 text-sm font-bold text-stone-600" data-tab="recipes">Recipes</button>
       <button class="tab touch shrink-0 rounded-xl px-5 text-sm font-bold text-stone-600" data-tab="shopping">Shopping list <span id="shoppingCount" class="ml-1 rounded-full bg-apricot px-2 py-0.5 text-xs text-ink">0</span></button>
     </nav>
@@ -130,7 +131,34 @@
       <p class="text-xs text-stone-500">Your calendar updates automatically whenever you change the weekly planner.</p>
     </section>
 
-    <section id="recipesView" class="view hidden space-y-5">
+
+    <section id="scannerView" class="view hidden space-y-5">
+      <div>
+        <p class="mb-1 text-xs font-bold uppercase tracking-[.18em] text-moss">From cookbook to recipe box</p>
+        <h1 class="text-3xl font-black tracking-tight sm:text-4xl">Recipe scanner <span aria-hidden="true">📸</span></h1>
+        <p class="mt-2 text-sm text-stone-500">Take a clear photo of a recipe page. Gather will read it and prepare a recipe card for you to check.</p>
+      </div>
+      <div class="rounded-2xl border border-line bg-paper p-5 shadow-soft">
+        <label class="block">
+          <span class="mb-2 block text-sm font-bold">Choose or take a recipe photo</span>
+          <input id="recipePhoto" type="file" accept="image/*" capture="environment" class="block w-full rounded-xl border border-line bg-white p-3 text-sm" />
+        </label>
+        <p class="mt-2 text-xs leading-relaxed text-stone-500">For best results, use good lighting, keep the page flat and make sure the whole recipe is in focus. You can also choose an existing photo.</p>
+        <img id="recipePhotoPreview" alt="Selected recipe page preview" class="mt-4 hidden max-h-96 w-full rounded-xl border border-line bg-cream object-contain" />
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button id="scanRecipeBtn" type="button" disabled class="touch rounded-xl bg-ink px-5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Read recipe photo</button>
+          <button id="clearRecipePhotoBtn" type="button" class="touch rounded-xl border border-line bg-white px-5 font-bold text-stone-600">Clear photo</button>
+        </div>
+        <div id="scanStatus" class="mt-4 hidden rounded-xl bg-sage/70 p-3 text-sm text-moss" role="status" aria-live="polite"></div>
+        <div id="scanProgressWrap" class="mt-3 hidden">
+          <div class="h-2 overflow-hidden rounded-full bg-cream"><div id="scanProgress" class="h-full w-0 rounded-full bg-moss transition-all"></div></div>
+        </div>
+      </div>
+      <div class="rounded-2xl border border-line bg-[#fff8ed] p-4 text-sm leading-relaxed text-stone-600">
+        <strong class="text-ink">A quick note:</strong> Photo reading works in your browser and needs an internet connection the first time it loads its reading engine. It can misread handwriting, fractions or blurry text, so you’ll always get a chance to check and edit everything before saving.
+      </div>
+    </section>
+\n    <section id="recipesView" class="view hidden space-y-5">
       <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div><p class="mb-1 text-xs font-bold uppercase tracking-[.18em] text-moss">Your collection</p><h1 class="text-3xl font-black tracking-tight sm:text-4xl">Recipe box</h1><p class="mt-2 text-sm text-stone-500">Save the meals you love, with ingredients ready for your list.</p></div>
         <button id="newRecipeBtn" class="touch rounded-xl bg-ink px-5 font-bold text-white shadow-soft">＋ Add a recipe</button>
@@ -429,6 +457,134 @@
     state.recipes=state.recipes.filter(r=>r.id!==id);
     DAYS.forEach(d=>MEALS.forEach(m=>{if(state.week[d][m]===id)state.week[d][m]='';}));
     closeRecipeModal(); persist(); showToast('Recipe deleted.');
+  });
+
+
+  // Recipe photo scanner: OCR runs in the browser, then the normal recipe editor
+  // is used as an editable review step before anything is saved.
+  let selectedRecipePhoto = null;
+  let recipeOcrWorkerPromise = null;
+
+  function setScanStatus(message, show=true) {
+    const el = $('scanStatus');
+    el.textContent = message;
+    el.classList.toggle('hidden', !show);
+  }
+  function loadRecipeOcr() {
+    if (recipeOcrWorkerPromise) return recipeOcrWorkerPromise;
+    recipeOcrWorkerPromise = new Promise((resolve, reject) => {
+      if (window.Tesseract) return resolve(window.Tesseract);
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      script.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error('The photo reader could not be loaded.'));
+      script.onerror = () => reject(new Error('Could not load the photo reader. Please check your internet connection and try again.'));
+      document.head.appendChild(script);
+    });
+    return recipeOcrWorkerPromise;
+  }
+  function parseScannedRecipe(rawText) {
+    const lines = rawText.split(/\r?\n/).map(s => s.replace(/\s+/g,' ').trim()).filter(Boolean);
+    const joined = lines.join('\n');
+    const title = (lines.find(s => s.length > 2 && s.length < 85 && !/^(ingredients|method|instructions|directions|preparation|serves|prep time|cook time)\b/i.test(s)) || '').replace(/^[^A-Za-z0-9]+/,'').trim();
+
+    let serves = '';
+    const servesMatch = joined.match(/\b(?:serves|makes|yield)\s*[:\-]?\s*([^\n,;]{1,35})/i);
+    if (servesMatch) serves = servesMatch[1].trim();
+
+    let time = '';
+    const timeMatch = joined.match(/\b(?:total\s+time|cooking\s+time|cook\s+time|prep(?:aration)?\s+time|time)\s*[:\-]?\s*((?:about\s*)?\d+\s*(?:hours?|hrs?|h|minutes?|mins?|m)(?:\s*\d+\s*(?:minutes?|mins?))?)/i);
+    if (timeMatch) time = timeMatch[1].trim();
+
+    const headingIndex = lines.findIndex(s => /^ingredients\b/i.test(s));
+    const methodIndex = lines.findIndex(s => /^(method|instructions|directions|preparation|to make)\b/i.test(s));
+    const ingredientStart = headingIndex >= 0 ? headingIndex + 1 : 0;
+    const ingredientEnd = methodIndex > ingredientStart ? methodIndex : lines.length;
+    const ingredientLines = lines.slice(ingredientStart, ingredientEnd).filter(s =>
+      !/^(serves|makes|yield|prep(?:aration)? time|cook(?:ing)? time|total time)\b/i.test(s) &&
+      !/^\d+\s*(?:minutes?|mins?|hours?|hrs?)\b/i.test(s)
+    );
+    const ingredients = [];
+    for (const line of ingredientLines) {
+      let cleaned = line.replace(/^[•●▪\-–*]\s*/,'').replace(/^\d+[.)]\s*/,'').trim();
+      if (!cleaned || /^(ingredients|method|instructions|directions)$/i.test(cleaned)) continue;
+      const m = cleaned.match(/^((?:\d+\s*\/\s*\d+|\d+(?:\.\d+)?|\d+\s+\d+\/\d+|½|⅓|⅔|¼|¾|⅛|a few|one|two|three)\s*(?:g|kg|ml|l|tsp|tbsp|teaspoons?|tablespoons?|cups?|oz|ounces?|lb|lbs|cloves?|cans?|packets?|slices?)?)\s+(.+)$/i);
+      if (m) {
+        const qtyUnit = m[1].trim();
+        const unitMatch = qtyUnit.match(/(g|kg|ml|l|tsp|tbsp|teaspoons?|tablespoons?|cups?|oz|ounces?|lb|lbs|cloves?|cans?|packets?|slices?)$/i);
+        const quantity = unitMatch ? qtyUnit.slice(0, unitMatch.index).trim() : qtyUnit;
+        const unit = unitMatch ? unitMatch[0].trim() : '';
+        ingredients.push({name:m[2].replace(/[,:;.]$/,''), quantity, unit});
+      } else if (cleaned.length < 100 && ingredients.length < 35) {
+        ingredients.push({name:cleaned.replace(/[,:;.]$/,''), quantity:'', unit:''});
+      }
+    }
+    let steps = [];
+    if (methodIndex >= 0) {
+      steps = lines.slice(methodIndex + 1).map(s => s.replace(/^\s*(?:\d+[.)]|step\s+\d+|[•●▪\-–*])\s*/i,'').trim())
+        .filter(s => s && !/^(notes|nutrition|tips)\b/i.test(s));
+    } else {
+      const numbered = lines.filter(s => /^\s*(?:\d+[.)]|step\s+\d+)\s+/.test(s));
+      if (numbered.length) steps = numbered.map(s => s.replace(/^\s*(?:\d+[.)]|step\s+\d+)\s*/i,'').trim());
+    }
+    return { title, serves, time, ingredients: ingredients.slice(0,40), steps, rawText: joined };
+  }
+
+  $('recipePhoto').addEventListener('change', e => {
+    selectedRecipePhoto = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+    const preview = $('recipePhotoPreview');
+    if (selectedRecipePhoto) {
+      preview.src = URL.createObjectURL(selectedRecipePhoto);
+      preview.classList.remove('hidden');
+      $('scanRecipeBtn').disabled = false;
+      setScanStatus('Photo ready. Tap “Read recipe photo” when you’re ready.');
+    } else {
+      preview.removeAttribute('src'); preview.classList.add('hidden');
+      $('scanRecipeBtn').disabled = true; setScanStatus('',false);
+    }
+  });
+  $('clearRecipePhotoBtn').addEventListener('click', () => {
+    $('recipePhoto').value = ''; selectedRecipePhoto = null;
+    $('recipePhotoPreview').removeAttribute('src'); $('recipePhotoPreview').classList.add('hidden');
+    $('scanRecipeBtn').disabled = true; $('scanProgressWrap').classList.add('hidden');
+    setScanStatus('',false);
+  });
+  $('scanRecipeBtn').addEventListener('click', async () => {
+    if (!selectedRecipePhoto) return;
+    const button = $('scanRecipeBtn');
+    button.disabled = true; $('scanProgressWrap').classList.remove('hidden');
+    $('scanProgress').style.width = '3%';
+    setScanStatus('Getting the photo reader ready…');
+    try {
+      const Tesseract = await loadRecipeOcr();
+      setScanStatus('Reading the page. This can take a little while…');
+      const result = await Tesseract.recognize(selectedRecipePhoto, 'eng', {
+        logger: info => {
+          if (info.status === 'recognizing text' && typeof info.progress === 'number') {
+            $('scanProgress').style.width = Math.max(3,Math.round(info.progress*100)) + '%';
+            setScanStatus('Reading the page… ' + Math.round(info.progress*100) + '%');
+          }
+        }
+      });
+      const parsed = parseScannedRecipe(result.data.text || '');
+      if (!parsed.title && !parsed.ingredients.length && !parsed.steps.length) {
+        setScanStatus('I couldn’t find enough recipe information in that photo. Try a brighter, sharper picture with the full recipe page visible.');
+        return;
+      }
+      const draft = {
+        id:'', title:parsed.title || 'Scanned recipe', tags:[], serves:parsed.serves,
+        time:parsed.time, enjoys:0, ingredients:parsed.ingredients.length ? parsed.ingredients : [{name:'',quantity:'',unit:''}],
+        steps:parsed.steps
+      };
+      setScanStatus('I’ve read the page. Please check the details in the recipe card and correct anything that looks wrong before saving.');
+      openRecipeModal(draft);
+      showToast('Recipe details ready to review.');
+    } catch (err) {
+      console.error(err);
+      setScanStatus(err.message || 'Sorry, the photo could not be read. Please try again with a clearer image.');
+    } finally {
+      button.disabled = !selectedRecipePhoto;
+      $('scanProgress').style.width = '100%';
+    }
   });
 
   function compiledItems() {
