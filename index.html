@@ -90,6 +90,7 @@
     </div>
     <nav class="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3 sm:px-6 lg:px-8" aria-label="Main navigation">
       <button class="tab active touch shrink-0 rounded-xl px-5 text-sm font-bold" data-tab="planner">Weekly planner</button>
+      <button class="tab touch shrink-0 rounded-xl px-5 text-sm font-bold text-stone-600" data-tab="calendar">Calendar</button>
       <button class="tab touch shrink-0 rounded-xl px-5 text-sm font-bold text-stone-600" data-tab="recipes">Recipes</button>
       <button class="tab touch shrink-0 rounded-xl px-5 text-sm font-bold text-stone-600" data-tab="shopping">Shopping list <span id="shoppingCount" class="ml-1 rounded-full bg-apricot px-2 py-0.5 text-xs text-ink">0</span></button>
     </nav>
@@ -110,6 +111,23 @@
       </div>
       <div id="weekGrid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
       <div class="rounded-2xl bg-sage/70 p-4 text-sm text-moss"><strong>Tip:</strong> Your shopping list updates automatically whenever you change a meal. Everything is saved on this device.</div>
+    </section>
+
+    <section id="calendarView" class="view hidden space-y-5">
+      <div>
+        <p class="mb-1 text-xs font-bold uppercase tracking-[.18em] text-moss">A week of little favourites</p>
+        <h1 class="text-3xl font-black tracking-tight sm:text-4xl">Weekly calendar <span aria-hidden="true">🌷</span></h1>
+        <p class="mt-2 text-sm text-stone-500">A lovely at-a-glance view of Hailee’s meals. Tap any planned meal to open its recipe.</p>
+      </div>
+      <div class="rounded-2xl border border-line bg-paper p-4 shadow-soft">
+        <div class="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-moss">
+          <span class="rounded-full bg-[#fff0f5] px-3 py-1.5">☀️ Breakfast</span>
+          <span class="rounded-full bg-[#fff6df] px-3 py-1.5">🍓 Lunch</span>
+          <span class="rounded-full bg-[#f2eafb] px-3 py-1.5">🌙 Dinner</span>
+        </div>
+        <div id="calendarGrid" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+      </div>
+      <p class="text-xs text-stone-500">Your calendar updates automatically whenever you change the weekly planner.</p>
     </section>
 
     <section id="recipesView" class="view hidden space-y-5">
@@ -217,10 +235,11 @@
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     window.scrollTo({top:0,behavior:'smooth'});
     if(name === 'shopping') renderShopping();
+    if(name === 'calendar') renderCalendar();
   }
   document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => openTab(b.dataset.tab)));
 
-  function renderAll() { renderPlanner(); renderRecipes(); renderShopping(); renderTagSelect(); }
+  function renderAll() { renderPlanner(); renderCalendar(); renderRecipes(); renderShopping(); renderTagSelect(); }
   function renderTagSelect() {
     const select = $('randomTag'), value = select.value;
     select.innerHTML = '<option value="">All tags</option>' + allTags().map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
@@ -254,6 +273,49 @@
     }));
     document.querySelectorAll('.surprise-btn').forEach(btn => btn.addEventListener('click', () => pickRandom(btn.dataset.day,btn.dataset.meal)));
   }
+  function renderCalendar() {
+    const mealStyles = {
+      Breakfast: 'bg-[#fff0f5] border-[#f3d9e5]',
+      Lunch: 'bg-[#fff6df] border-[#f3e5bd]',
+      Dinner: 'bg-[#f2eafb] border-[#e5d9f2]'
+    };
+    const mealIcons = { Breakfast: '☀️', Lunch: '🍓', Dinner: '🌙' };
+    $('calendarGrid').innerHTML = DAYS.map(day => `
+      <article class="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+        <div class="flex items-center justify-between border-b border-line bg-[#fff1f5] px-4 py-3">
+          <h2 class="font-black text-[#765879]">${day}</h2>
+          <span class="text-xs font-semibold text-[#a1849d]">3 little meals</span>
+        </div>
+        <div class="space-y-2 p-3">
+          ${MEALS.map(meal => {
+            const recipe = recipeById(state.week[day]?.[meal] || '');
+            return recipe
+              ? `<button type="button" class="calendar-recipe ${mealStyles[meal]} flex min-h-[70px] w-full items-center gap-3 rounded-xl border p-3 text-left transition hover:shadow-sm" data-recipe-id="${escapeHtml(recipe.id)}" aria-label="Open ${escapeHtml(recipe.title)} for ${day} ${meal}">
+                  <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/80 text-lg">${mealIcons[meal]}</span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-[10px] font-extrabold uppercase tracking-wider text-[#987b95]">${meal}</span>
+                    <span class="mt-0.5 block truncate text-sm font-bold text-[#59465f]">${escapeHtml(recipe.title)}</span>
+                    <span class="mt-0.5 block text-xs text-[#987b95]">Tap to view recipe ↗</span>
+                  </span>
+                  <span class="text-lg text-[#a1849d]" aria-hidden="true">›</span>
+                </button>`
+              : `<div class="${mealStyles[meal]} flex min-h-[70px] items-center gap-3 rounded-xl border border-dashed p-3 opacity-80">
+                  <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/80 text-lg">${mealIcons[meal]}</span>
+                  <span><span class="block text-[10px] font-extrabold uppercase tracking-wider text-[#987b95]">${meal}</span><span class="text-sm text-[#987b95]">Nothing planned yet</span></span>
+                </div>`;
+          }).join('')}
+        </div>
+      </article>`).join('');
+    $('calendarGrid').querySelectorAll('.calendar-recipe').forEach(button => {
+      button.addEventListener('click', () => openCalendarRecipe(button.dataset.recipeId));
+    });
+  }
+
+  function openCalendarRecipe(id) {
+    const recipe = recipeById(id);
+    if (recipe) openRecipeModal(recipe);
+  }
+
   function pickRandom(day, meal) {
     const tag = mealRandomTags[`${day}|${meal}`] || '';
     const pool = state.recipes.filter(r => !tag || (r.tags||[]).includes(tag));
