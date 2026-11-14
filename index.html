@@ -33,6 +33,10 @@
     input, select { outline:none; }
     input:focus, select:focus { border-color:#496b58 !important; box-shadow:0 0 0 3px rgba(73,107,88,.13); }
     .checkline.checked span { text-decoration:line-through;color:#89928b; }
+    .rating-stars { display:flex; align-items:center; gap:4px; }
+    .rating-star { border:0; background:transparent; color:#c9c9bd; font-size:1.8rem; line-height:1; padding:4px; min-width:36px; min-height:44px; cursor:pointer; }
+    .rating-star.selected { color:#d69a35; }
+    .rating-star:focus-visible { outline:2px solid #496b58; outline-offset:2px; border-radius:8px; }
     @media (max-width: 520px) {
       .ingredient-row { grid-template-columns:minmax(0,1fr) 68px 82px 40px;gap:5px; }
     }
@@ -106,6 +110,18 @@
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="block"><span class="mb-2 block text-sm font-bold">Serves</span><input id="recipeServes" type="text" maxlength="40" placeholder="e.g. 4 people" class="touch w-full rounded-xl border border-line bg-white px-4" /></label>
           <label class="block"><span class="mb-2 block text-sm font-bold">Time taken</span><input id="recipeTime" type="text" maxlength="50" placeholder="e.g. 35 minutes" class="touch w-full rounded-xl border border-line bg-white px-4" /></label>
+        </div>
+        <div class="rounded-2xl bg-cream p-4">
+          <div class="text-sm font-bold">How much Hailee enjoys</div>
+          <div id="recipeRatingStars" class="rating-stars mt-1" role="group" aria-label="How much Hailee enjoys this recipe">
+            <button type="button" class="rating-star" data-rating="1" aria-label="1 out of 5 stars">★</button>
+            <button type="button" class="rating-star" data-rating="2" aria-label="2 out of 5 stars">★</button>
+            <button type="button" class="rating-star" data-rating="3" aria-label="3 out of 5 stars">★</button>
+            <button type="button" class="rating-star" data-rating="4" aria-label="4 out of 5 stars">★</button>
+            <button type="button" class="rating-star" data-rating="5" aria-label="5 out of 5 stars">★</button>
+          </div>
+          <input type="hidden" id="recipeEnjoys" value="0" />
+          <p id="recipeRatingHelp" class="mt-1 text-xs text-stone-500">Tap a star to give this recipe a rating. Tap the selected rating again to clear it.</p>
         </div>
         <div><div class="mb-3 flex items-center justify-between"><span class="text-sm font-bold">Ingredients</span><button type="button" id="addIngredientBtn" class="touch rounded-xl bg-sage px-4 text-sm font-bold text-moss">＋ Add ingredient</button></div><div id="ingredientEditor" class="space-y-2"></div><p class="mt-2 text-xs text-stone-400">Add a name, quantity and unit for each ingredient. Quantity can be a number or text such as “to taste”.</p></div>
         <label class="block"><span class="mb-2 block text-sm font-bold">Method / steps</span><textarea id="recipeSteps" rows="5" placeholder="Write each step on a new line…" class="w-full rounded-xl border border-line bg-white px-4 py-3"></textarea><p class="mt-2 text-xs text-stone-400">Enter one step per line. Your steps will be shown in order on the recipe card.</p></label>
@@ -215,7 +231,11 @@
     $('recipeList').innerHTML = filtered.map(r=>`
       <article class="rounded-2xl border border-line bg-paper p-5 shadow-soft">
         <div class="flex items-start justify-between gap-3"><div><h3 class="text-lg font-black">${escapeHtml(r.title)}</h3><div class="mt-2 flex flex-wrap gap-1.5">${r.tags.map(t=>`<span class="rounded-full bg-sage px-2.5 py-1 text-xs font-bold text-moss">${escapeHtml(t)}</span>`).join('')}</div></div><button class="edit-recipe touch -mr-2 -mt-2 w-11 rounded-xl text-xl text-stone-400 hover:bg-cream" data-id="${r.id}" aria-label="Edit ${escapeHtml(r.title)}">···</button></div>
-        <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-moss">${r.serves?`<span class="rounded-lg bg-cream px-2.5 py-1">♟ Serves ${escapeHtml(r.serves)}</span>`:''}${r.time?`<span class="rounded-lg bg-cream px-2.5 py-1">◷ ${escapeHtml(r.time)}</span>`:''}</div>
+        <div class="mt-3 rounded-xl bg-cream px-3 py-2">
+          <div class="text-xs font-bold text-stone-500">How much Hailee enjoys</div>
+          <div class="mt-0.5 flex items-center gap-2"><span class="text-lg tracking-wide" style="color:#d69a35" aria-label="${Number(r.enjoys)||0} out of 5 stars">${'★'.repeat(Math.max(0,Math.min(5,Number(r.enjoys)||0)))}${'☆'.repeat(5-Math.max(0,Math.min(5,Number(r.enjoys)||0)))}</span><span class="text-xs text-stone-500">${Number(r.enjoys)>0?`${Number(r.enjoys)}/5`:'Not rated yet'}</span></div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-moss">${r.serves?`<span class="rounded-lg bg-cream px-2.5 py-1">♟ Serves ${escapeHtml(r.serves)}</span>`:''}${r.time?`<span class="rounded-lg bg-cream px-2.5 py-1">◷ ${escapeHtml(r.time)}</span>`:''}</div>
         <div class="mt-4 border-t border-line pt-3"><div class="mb-2 text-xs font-extrabold uppercase tracking-wider text-stone-400">${r.ingredients.length} ingredients</div><ul class="space-y-1 text-sm text-stone-600">${r.ingredients.slice(0,4).map(i=>`<li>· ${escapeHtml(i.name)} <span class="text-stone-400">${escapeHtml(i.quantity)} ${escapeHtml(i.unit)}</span></li>`).join('')}${r.ingredients.length>4?`<li class="text-xs text-moss">+ ${r.ingredients.length-4} more</li>`:''}</ul></div>
         ${r.steps?.length?`<div class="mt-4 border-t border-line pt-3"><div class="mb-2 text-xs font-extrabold uppercase tracking-wider text-stone-400">Method</div><ol class="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-stone-600">${r.steps.slice(0,3).map(s=>`<li>${escapeHtml(s)}</li>`).join('')}${r.steps.length>3?`<li class="list-none text-xs text-moss">+ ${r.steps.length-3} more steps</li>`:''}</ol></div>`:''}
       </article>`).join('');
@@ -231,12 +251,30 @@
     row.querySelector('button').addEventListener('click',()=>{ if($('ingredientEditor').children.length>1) row.remove(); else { row.querySelectorAll('input').forEach(i=>i.value=''); } });
     $('ingredientEditor').appendChild(row);
   }
+  function updateRatingStars() {
+    const rating=Number($('recipeEnjoys').value)||0;
+    $('recipeRatingStars').querySelectorAll('.rating-star').forEach(button=>{
+      const value=Number(button.dataset.rating);
+      button.classList.toggle('selected',value<=rating);
+      button.textContent=value<=rating?'★':'☆';
+      button.setAttribute('aria-pressed',value===rating?'true':'false');
+    });
+    $('recipeRatingHelp').textContent=rating?`${rating} out of 5 stars — tap the selected rating again to clear it.`:'Tap a star to give this recipe a rating.';
+  }
+  $('recipeRatingStars').querySelectorAll('.rating-star').forEach(button=>button.addEventListener('click',()=>{
+    const current=Number($('recipeEnjoys').value)||0;
+    $('recipeEnjoys').value=String(current===Number(button.dataset.rating)?0:Number(button.dataset.rating));
+    updateRatingStars();
+  }));
+
   function openRecipeModal(recipe=null) {
     $('recipeForm').reset(); $('ingredientEditor').innerHTML='';
     $('recipeId').value=recipe?.id||''; $('recipeTitle').value=recipe?.title||'';
     $('recipeTags').value=(recipe?.tags||[]).join(', ');
     $('recipeServes').value=recipe?.serves||'';
     $('recipeTime').value=recipe?.time||'';
+    $('recipeEnjoys').value=String(Math.max(0,Math.min(5,Number(recipe?.enjoys)||0)));
+    updateRatingStars();
     $('recipeSteps').value=(recipe?.steps||[]).join('\n');
     (recipe?.ingredients?.length ? recipe.ingredients : [{name:'',quantity:'',unit:''}]).forEach(ingredientRow);
     $('modalTitle').textContent=recipe?'Edit recipe':'Add a recipe';
@@ -257,7 +295,7 @@
     const ingredients=[...$('ingredientEditor').children].map(row=>{const inputs=row.querySelectorAll('input');return {name:inputs[0].value.trim(),quantity:inputs[1].value.trim(),unit:inputs[2].value.trim()};}).filter(i=>i.name);
     if(!ingredients.length){showToast('Add at least one ingredient.');return;}
     const id=$('recipeId').value||uid(), existing=recipeById(id);
-    const recipe={id,title:$('recipeTitle').value.trim(),tags:[...new Set($('recipeTags').value.split(',').map(t=>t.trim()).filter(Boolean))],serves:$('recipeServes').value.trim(),time:$('recipeTime').value.trim(),steps:$('recipeSteps').value.split('\n').map(s=>s.trim()).filter(Boolean),ingredients};
+    const recipe={id,title:$('recipeTitle').value.trim(),tags:[...new Set($('recipeTags').value.split(',').map(t=>t.trim()).filter(Boolean))],serves:$('recipeServes').value.trim(),time:$('recipeTime').value.trim(),enjoys:Math.max(0,Math.min(5,Number($('recipeEnjoys').value)||0)),steps:$('recipeSteps').value.split('\n').map(s=>s.trim()).filter(Boolean),ingredients};
     if(existing) state.recipes=state.recipes.map(r=>r.id===id?recipe:r); else state.recipes.push(recipe);
     closeRecipeModal(); persist(); showToast('Recipe saved.');
   });
