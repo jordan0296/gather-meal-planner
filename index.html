@@ -249,8 +249,16 @@
     select.value = allTags().includes(value) ? value : '';
   }
   function mealSelect(day, meal, selected) {
-    const options = [...state.recipes].sort((a,b)=>a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })).map(r=>`<option value="${escapeHtml(r.id)}" ${r.id===selected?'selected':''}>${escapeHtml(r.title)}</option>`).join('');
-    return `<select class="meal-select touch w-full min-w-0 rounded-xl border border-line bg-white px-3 text-sm" data-day="${day}" data-meal="${meal}" aria-label="${day} ${meal} recipe"><option value="">Choose a recipe…</option>${options}</select>`;
+    const categories = ['Breakfast','Lunch','Dinner','Snack'];
+    const sorted = [...state.recipes].sort((a,b)=>a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+    const groups = categories.map(category => {
+      const matches = sorted.filter(r => (r.tags || []).some(tag => String(tag).trim().toLowerCase() === category.toLowerCase()));
+      if (!matches.length) return '';
+      return `<optgroup label="${category}">${matches.map(r=>`<option value="${escapeHtml(r.id)}" ${r.id===selected?'selected':''}>${escapeHtml(r.title)}</option>`).join('')}</optgroup>`;
+    }).join('');
+    const uncategorised = sorted.filter(r => !(r.tags || []).some(tag => categories.some(category => String(tag).trim().toLowerCase() === category.toLowerCase())));
+    const otherGroup = uncategorised.length ? `<optgroup label="Other recipes">${uncategorised.map(r=>`<option value="${escapeHtml(r.id)}" ${r.id===selected?'selected':''}>${escapeHtml(r.title)}</option>`).join('')}</optgroup>` : '';
+    return `<select class="meal-select touch w-full min-w-0 rounded-xl border border-line bg-white px-3 text-sm" data-day="${day}" data-meal="${meal}" aria-label="${day} ${meal} recipe"><option value="">Choose a recipe…</option>${groups}${otherGroup}</select>`;
   }
   function renderPlanner() {
     $('weekGrid').innerHTML = DAYS.map(day => `
