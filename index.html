@@ -337,10 +337,21 @@
     state.week[day][meal] = chosen.id; persist(); showToast(`${day} ${meal}: ${chosen.title}`);
   }
   $('randomAllBtn').addEventListener('click', () => {
-    const tag = $('randomTag').value, pool = state.recipes.filter(r=>!tag || r.tags.includes(tag));
-    if(!pool.length) { showToast('Add a matching recipe first.'); return; }
-    DAYS.forEach(d=>MEALS.forEach(m=>{ state.week[d][m] = pool[Math.floor(Math.random()*pool.length)].id; }));
-    persist(); showToast('Your week has been filled with surprises!');
+    const extraTag = $('randomTag').value;
+    const pools = Object.fromEntries(MEALS.map(meal => [meal, state.recipes.filter(r => {
+      const tags = (r.tags || []).map(t => String(t).trim().toLowerCase());
+      return tags.includes(meal.toLowerCase()) && (!extraTag || tags.includes(extraTag.trim().toLowerCase()));
+    })]));
+    const missing = MEALS.filter(meal => !pools[meal].length);
+    if (missing.length) {
+      showToast(`Add ${missing.join(', ')}-tagged recipes${extraTag ? ` also tagged ${extraTag}` : ''} before filling the week.`);
+      return;
+    }
+    DAYS.forEach(day => MEALS.forEach(meal => {
+      const pool = pools[meal];
+      state.week[day][meal] = pool[Math.floor(Math.random() * pool.length)].id;
+    }));
+    persist(); showToast('Your week is filled with Breakfast, Lunch and Dinner recipes!');
   });
   $('clearWeekBtn').addEventListener('click', () => {
     if(!confirm('Clear all 21 meal slots?')) return;
